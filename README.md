@@ -158,7 +158,10 @@ K1-Radar-Rehab-EdgeAI/
 │       ├── ambient_frustration.wav
 │       └── cue_*.wav           # 动作指令音效
 │
-├── figures/                    # 系统架构图与实物照片（待补充）
+├── figures/                    # 系统截图与实物照片
+│   ├── hdmi/                   # HDMI 屏幕截图（待机/平静/沮丧）
+│   ├── web/                    # Web 控制台截图（7页）
+│   └── hardware/               # 硬件实物照片（整机/SPI连接/K1/雷达）
 │
 ├── demo/                       # 演示视频（待补充）
 │   └── .gitkeep
@@ -246,7 +249,6 @@ REHAB_MOCK_SENSING=1 python3 -m backend.server
 
 - [ ] 演示视频（`demo/`）
 - [ ] 团队成员信息
-- [ ] 雷达固件编译说明（SDK版本、工具链）
 
 ---
 
