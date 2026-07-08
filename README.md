@@ -49,8 +49,6 @@
 
 ## 🏗️ 系统架构
 
-![系统架构](figures/fig_system_architecture.png)
-
 ### 硬件链路
 
 ```
@@ -159,14 +157,7 @@ K1-Radar-Rehab-EdgeAI/
 │       ├── ambient_frustration.wav
 │       └── cue_*.wav           # 动作指令音效
 │
-├── figures/                    # 系统架构图与实物照片
-│   ├── fig_system_architecture.png
-│   ├── fig_algorithm_pipeline.png
-│   ├── fig_dataflow.png
-│   ├── 整体架构图.png
-│   ├── RS6240.jpg              # 雷达模组
-│   ├── k1.jpg                  # K1 开发板
-│   └── 进迭时空k1 MUSE Pi Pro引脚示意图.png
+├── figures/                    # 系统架构图与实物照片（待补充）
 │
 ├── demo/                       # 演示视频（待补充）
 │   └── .gitkeep
