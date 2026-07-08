@@ -1,0 +1,24 @@
+[Unit]
+Description=Rehab K1 Screen Renderer (pygame HDMI)
+Documentation=https://github.com/...
+After=rehab-backend.service graphical.target
+Wants=rehab-backend.service
+
+[Service]
+Type=simple
+User=winwin51
+Group=winwin51
+WorkingDirectory=/home/winwin51/radar_r/realtime3.0
+
+Environment="DISPLAY=:0"
+Environment="SDL_VIDEODRIVER=x11"
+
+ExecStart=/home/winwin51/radar/bin/python3 -m screen.app --fullscreen
+Restart=on-failure
+RestartSec=3
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

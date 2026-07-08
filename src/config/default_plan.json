@@ -1,0 +1,29 @@
+{
+  "_comment": "临床默认计划模板 - 基于 JOSPT 2018 Knee Pain Clinical Practice Guidelines 与 APTA/AAOS 半月板康复教育材料。最终参数由医生根据患者康复阶段调整。",
+  "_source": "JOSPT 2018 (Logerstedt et al.) + APTA Meniscal Rehabilitation Guidelines",
+
+  "sets": 3,
+  "reps_per_set": 12,
+  "lift_s": 2.0,
+  "hold_s": 3.0,
+  "lower_s": 2.0,
+  "rest_between_rep_s": 2.0,
+  "rest_between_set_s": 30,
+  "target_angle_deg": 30,
+  "baseline_min": 4,
+
+  "adjustment_rules": {
+    "frustration_sustained": {
+      "_when": "30s 内 frustration 占比 > 50%",
+      "reduce_reps_to": 8,
+      "extend_rest_s": 15,
+      "slow_pace_factor": 1.2,
+      "tts_trigger": "encourage_calm"
+    },
+    "pleasure_sustained": {
+      "_when": "30s 内 pleasure 占比 > 50%",
+      "_action": "保持原计划,不冒进",
+      "tts_trigger": "encourage_praise"
+    }
+  }
+}

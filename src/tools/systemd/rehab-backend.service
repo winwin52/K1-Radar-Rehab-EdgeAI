@@ -1,0 +1,25 @@
+[Unit]
+Description=Rehab K1 Backend (FastAPI + Coordinator)
+Documentation=https://github.com/...
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=winwin51
+Group=winwin51
+WorkingDirectory=/home/winwin51/radar_r/realtime3.0
+
+# Inject secrets (DEEPSEEK_API_KEY etc.) — file is 600 / not in git
+EnvironmentFile=-/home/winwin51/radar_r/realtime3.0/config/secrets.env
+
+ExecStart=/home/winwin51/radar/bin/python3 -m backend.server
+Restart=on-failure
+RestartSec=5
+
+# Logging — journalctl -u rehab-backend -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,73 @@
+# config/llm.toml — LLM 子系统配置
+#
+# 业务代码不直接读这个文件，由 backend/llm/factory.py 加载。
+# 修改这个文件可以热切换 provider、模型、参数，不需要重启服务。
+
+# ─────────────────────────────────────────────────────────────
+# Default settings — 所有用例继承
+# ─────────────────────────────────────────────────────────────
+[default]
+provider     = "deepseek"                       # "deepseek" | "mock" | "claude" | ...
+base_url     = "https://api.deepseek.com/v1"    # OpenAI 兼容协议
+model        = "deepseek-chat"                  # 文本模型,V3
+api_key_env  = "DEEPSEEK_API_KEY"               # 从环境变量读密钥,绝不写在这里
+timeout_s    = 30
+max_retries  = 3
+backoff_s    = 2                                # 重试指数退避基数
+
+# ─────────────────────────────────────────────────────────────
+# Use-case 0: 康复评估报告 (session 结束后异步)
+# ─────────────────────────────────────────────────────────────
+[assessment]
+inherit      = "default"
+temperature  = 0.3                              # 低温,保证报告稳定客观
+max_tokens   = 2000
+prompt_file  = "prompts/assessment_v1.md"
+cache_enable = true                             # 相同 session_id 不重复生成
+
+# ─────────────────────────────────────────────────────────────
+# Use-case 1: 个性化鼓励语文本 (Coach 触发,~2s 出结果)
+# ─────────────────────────────────────────────────────────────
+[encourage]
+inherit      = "default"
+temperature  = 0.85                             # 高温,语句多样化
+max_tokens   = 80
+prompt_file  = "prompts/encourage_v1.md"
+cache_enable = false                            # 鼓励语要新鲜,不缓存
+dedupe_recent = 5                               # 最近 5 句不重复
+
+# ─────────────────────────────────────────────────────────────
+# Use-case 2: Coach 决策辅助 (当前版预留,不调用)
+# ─────────────────────────────────────────────────────────────
+[coach_advisor]
+enabled      = false                            # 当前版关闭
+inherit      = "default"
+temperature  = 0.2
+max_tokens   = 500
+prompt_file  = "prompts/coach_advice_v1.md"
+
+# ─────────────────────────────────────────────────────────────
+# 预算控制 (硬上限,超过后所有 LLM 调用走 fallback)
+# ─────────────────────────────────────────────────────────────
+[budget]
+daily_yuan   = 10.0                             # 每日 10 元上限
+warn_at_pct  = 0.8                              # 80% 时告警
+hard_stop    = true                             # 超额后停止 AI 调用,业务继续
+
+# ─────────────────────────────────────────────────────────────
+# 审计与缓存
+# ─────────────────────────────────────────────────────────────
+[audit]
+log_file     = "audit/llm_calls.jsonl"          # 每次调用一行 JSON
+daily_summary = "audit/daily_summary.json"
+
+[cache]
+backend      = "sqlite"
+file         = "audit/llm_cache.db"
+
+# ─────────────────────────────────────────────────────────────
+# 隐私
+# ─────────────────────────────────────────────────────────────
+[privacy]
+hash_patient_name = true                        # 姓名 → patient_id hash 后才上行
+strip_fields     = ["device_mac", "ip_address"]

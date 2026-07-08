@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1620">
+  <title>康复系统控制台</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- ───── Header ───── -->
+  <header>
+    <div class="title-row">
+      <h1>康复系统控制台</h1>
+      <div class="conn-status">
+        <span class="status-dot" :class="state.toLowerCase()"></span>
+        <span class="status-label">{{stateLabel}}</span>
+      </div>
+    </div>
+    <div class="device-line">
+      <span>{{deviceName}}</span>
+      <span class="mono">{{deviceIp}}</span>
+      <span :class="wsConnected ? 'ok' : 'fail'">
+        ● {{wsConnected ? '已连接' : '已断开'}}
+      </span>
+    </div>
+  </header>
+
+  <!-- ───── PANEL: live monitor (WORKING) ───── -->
+  <section v-if="state === 'WORKING'" class="card live">
+    <div class="live-header">
+      <div class="live-patient">
+        <div class="lbl">患者</div>
+        <div class="val-lg">{{patient || '-'}}</div>
+      </div>
+      <div class="live-elapsed">
+        <div class="lbl">已用时</div>
+        <div class="val-lg mono">{{elapsed}}</div>
+      </div>
+    </div>
+
+    <div class="fsm-display">
+      <div class="fsm-badge" :class="'fsm-' + fsmSlug">
+        {{fsmLabel}}
+      </div>
+      <div v-if="progress && progress.countdown_s !== undefined" class="countdown">
+        {{progress.countdown_s.toFixed(1)}} <span class="unit">秒</span>
+      </div>
+      <div v-if="progress && progress.paused" class="paused-tag">已暂停</div>
+    </div>
+
+    <div v-if="progress" class="progress-grid">
+      <div>
+        <div class="lbl">当前组</div>
+        <div class="val">{{progress.current_set || '-'}} / {{progress.sets_total || '-'}}</div>
+      </div>
+      <div>
+        <div class="lbl">当前次</div>
+        <div class="val">{{progress.current_rep || '-'}} / {{progress.reps_total || '-'}}</div>
+      </div>
+    </div>
+
+    <div v-if="gamification" class="journey-card">
+      <div class="journey-main">
+        <span class="journey-stage">{{gamification.stage || '山脚'}}</span>
+        <span class="journey-title">{{journeyText}}</span>
+      </div>
+      <div class="journey-track">
+        <div class="journey-fill"
+             :style="{width: Math.min(100, Math.round((gamification.progress_pct || 0) * 100)) + '%'}"></div>
+      </div>
+      <div class="journey-sub">
+        连续 {{gamification.streak_days || 0}} 天 · 下一里程碑 {{gamification.next_milestone || '-'}}m
+      </div>
+    </div>
+
+    <!-- Phase 5: live emotion + breathing -->
+    <div v-if="emotion && emotion.label" class="emotion-card">
+      <div class="emo-header">
+        <span class="lbl">实时情绪</span>
+        <span class="emo-label" :class="'emo-' + emotion.label">
+          {{emotionLabel}}
+        </span>
+        <span v-if="emotion.chest_dist_cm != null" class="emo-side">
+          距离 {{Math.round(emotion.chest_dist_cm)}} cm
+        </span>
+        <span v-if="emotion.br_bpm != null" class="emo-side">
+          呼吸 {{emotion.br_bpm.toFixed(1)}} bpm
+        </span>
+      </div>
+      <div class="emo-bars">
+        <div v-for="(name, idx) in emotionNames" :key="name" class="emo-bar-row">
+          <span class="emo-bar-lbl">{{emotionZh[name]}}</span>
+          <div class="emo-bar-track">
+            <div class="emo-bar-fill" :class="'emo-' + name"
+                 :style="{width: emoProbPct(idx) + '%'}"></div>
+          </div>
+          <span class="emo-bar-pct">{{emoProbPct(idx)}}%</span>
+        </div>
+      </div>
+      <div v-if="coachTrigger" class="coach-banner">
+        {{coachTrigger}}
+      </div>
+    </div>
+
+    <!-- Phase 5: radar sensing health indicator -->
+    <div v-if="sensing" class="sensing-line">
+      <span class="sens-dot" :class="sensingDotClass"></span>
+      <span class="sens-text">{{sensingText}}</span>
+      <span v-if="sensing.baseline_pct != null && !sensing.baseline_done"
+            class="sens-baseline">
+        基线采集 {{Math.round(sensing.baseline_pct * 100)}}%
+      </span>
+      <span v-else-if="sensing.baseline_done" class="sens-baseline ok">
+        基线已就绪
+      </span>
+      <span v-if="sensingDiagText" class="sens-frames">
+        {{sensingDiagText}}
+      </span>
+      <span v-else class="sens-frames">
+        共 {{sensing.frames_total || 0}} 个样本
+      </span>
+    </div>
+
+    <div v-if="empathyRequest" class="empathy-inline">
+      <div class="empathy-title">{{empathyPromptText}}</div>
+      <div class="empathy-actions">
+        <button @click="chooseEmpathy('continue')" :disabled="busy.empathy">继续</button>
+        <button @click="chooseEmpathy('reduce_2')" :disabled="busy.empathy">今天少一点</button>
+        <button class="primary" @click="chooseEmpathy('rest_1m')" :disabled="busy.empathy">休息 1 分钟</button>
+      </div>
+    </div>
+
+    <div class="button-row">
+      <button v-if="!isPaused"
+              class="secondary"
+              @click="pauseSession"
+              :disabled="busy.pause || pendingAbort">
+        {{busy.pause ? '处理中…' : '暂停'}}
+      </button>
+      <button v-else
+              class="primary"
+              @click="resumeSession"
+              :disabled="busy.resume || pendingAbort">
+        {{busy.resume ? '处理中…' : '继续'}}
+      </button>
+      <button class="secondary"
+              @click="skipSet"
+              :disabled="busy.skip || pendingAbort">
+        {{busy.skip ? '处理中…' : '跳过本组'}}
+      </button>
+    </div>
+    <div class="button-row">
+      <button class="secondary"
+              @click="stopSession"
+              :disabled="busy.stop || pendingAbort">
+        {{busy.stop ? '处理中…' : '结束 Session'}}
+      </button>
+      <button class="danger"
+              @click="abortSession"
+              :disabled="busy.abort || pendingAbort">
+        {{busy.abort ? '处理中…' : '强制中止'}}
+      </button>
+    </div>
+
+    <!-- Abort feedback banner: shown while we wait for the device to
+         transition out of WORKING after the user pressed stop/abort. -->
+    <div v-if="abortingBanner" class="aborting-banner">
+      正在结束 Session,请稍候…
+    </div>
+  </section>
+
+  <!-- ───── PANEL: error state ───── -->
+  <section v-else-if="state === 'ERROR'" class="card error">
+    <h2>⚠ 系统错误</h2>
+    <p>{{errorMsg || '未知错误'}}</p>
+    <button class="secondary" @click="abortSession">恢复到待机</button>
+  </section>
+
+  <!-- ───── PANEL: idle/home with tabs ───── -->
+  <main v-else-if="state === 'IDLE'">
+    <!-- Sub-panels switched by `panel` -->
+
+    <!-- Home: tabs + patient list + history -->
+    <div v-if="panel === 'home'">
+      <div class="tabs">
+        <button :class="['tab', {active: tab === 'patients'}]" @click="tab='patients'">
+          患者 ({{patients.length}})
+        </button>
+        <button :class="['tab', {active: tab === 'history'}]" @click="tab='history'">
+          历史 ({{history.length}})
+        </button>
+      </div>
+
+      <!-- Patients tab -->
+      <div v-if="tab === 'patients'">
+        <button class="primary" @click="openPatientForm()">+ 新建患者</button>
+        <div v-if="patients.length === 0" class="hint" style="margin-top:18px">
+          暂无患者档案。点击"新建患者"开始。
+        </div>
+        <div v-else class="list">
+          <div v-for="p in patients" :key="p.name" class="row">
+            <div class="row-main">
+              <div class="row-title">{{p.name}}</div>
+              <div class="row-sub">
+                {{sideLabel(p.injury_side)}} ·
+                {{p.session_count}} 次康复
+                · {{patientJourneyTitle(p)}}
+                · {{patientElevationText(p)}}
+                <span v-if="p.last_session_ts">· 上次 {{fmtDate(p.last_session_ts)}}</span>
+                <span>· {{patientStreakText(p)}}</span>
+              </div>
+            </div>
+            <div class="row-actions">
+              <button @click="openPlanForPatient(p.name)">启动</button>
+              <button @click="viewHistory(p.name)">历史</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History tab -->
+      <div v-if="tab === 'history'">
+        <div class="filter-row">
+          <select v-model="historyFilter" @change="loadHistory">
+            <option value="">所有患者</option>
+            <option v-for="p in patients" :key="p.name" :value="p.name">{{p.name}}</option>
+          </select>
+        </div>
+        <div v-if="history.length === 0" class="hint" style="margin-top:18px">
+          暂无历史记录
+        </div>
+        <div v-else class="list">
+          <div v-for="s in history" :key="s.patient + '/' + s.session_id" class="row">
+            <div class="row-main">
+              <div class="row-title">{{s.patient}}</div>
+              <div class="row-sub">
+                {{fmtSessionId(s.session_id)}} ·
+                {{s.status === 'completed' ? '✓ 完成' : s.status === 'aborted' ? '⊘ 中止' : '? ' + s.status}}
+                · 完成度 {{s.completion_pct || 0}}%
+                · 时长 {{(s.duration_s || 0).toFixed(0)}}s
+                · <span v-if="s.has_assessment">📄 AI 报告</span>
+            </div>
+            </div>
+            <div class="row-actions">
+              <button @click="viewAssessment(s.patient, s.session_id)">报告</button>
+              <a :href="downloadUrl(s)" class="btn-link">下载</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Patient form panel -->
+    <div v-if="panel === 'patient_form'" class="card">
+      <h2>新建患者档案</h2>
+      <div class="form-grid">
+        <div class="field">
+          <label>姓名 *</label>
+          <input v-model="patientForm.name" placeholder="张三">
+        </div>
+        <div class="field">
+          <label>损伤侧</label>
+          <select v-model="patientForm.injury_side">
+            <option value="left">左膝</option>
+            <option value="right">右膝</option>
+            <option value="bilateral">双侧</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>损伤日期</label>
+          <input type="date" v-model="patientForm.injury_date">
+        </div>
+        <div class="field">
+          <label>术后/伤后周数</label>
+          <input type="number" min="0" max="52" v-model.number="patientForm.stage_weeks_post_injury">
+        </div>
+        <div class="field">
+          <label>康复周期 (周)</label>
+          <input type="number" min="1" max="52" v-model.number="patientForm.rehab_cycle_total_weeks">
+        </div>
+        <div class="field full">
+          <p class="hint">山岳进度目标 = 周期 × 500m。默认 12 周 = 6000m，可后续在患者档案中调整。</p>
+        </div>
+        <div class="field full">
+          <label>医生</label>
+          <input v-model="patientForm.doctor" placeholder="李医生">
+        </div>
+        <div class="field full">
+          <label>备注</label>
+          <textarea rows="3" v-model="patientForm.notes" placeholder="内侧半月板撕裂,保守治疗第 3 周"></textarea>
+        </div>
+      </div>
+      <div class="button-row">
+        <button class="secondary" @click="panel='home'">取消</button>
+        <button class="primary" @click="createPatient" :disabled="busy.createPatient || !patientForm.name.trim()">
+          {{busy.createPatient ? '创建中…' : '创建'}}
+        </button>
+      </div>
+    </div>
+
+    <!-- Plan editor panel -->
+    <div v-if="panel === 'plan_editor'" class="card">
+      <h2>编辑康复计划 — {{selectedPatient}}</h2>
+      <div class="radio-row">
+        <label><input type="radio" v-model="planMode" value="default"> 临床默认</label>
+        <label><input type="radio" v-model="planMode" value="custom"> 自定义</label>
+      </div>
+      <div v-if="planMode === 'custom'" class="form-grid">
+        <div class="field">
+          <label>组数</label>
+          <input type="number" min="1" max="10" v-model.number="planForm.sets">
+        </div>
+        <div class="field">
+          <label>单组次数</label>
+          <input type="number" min="1" max="50" v-model.number="planForm.reps_per_set">
+        </div>
+        <div class="field">
+          <label>上抬 (秒)</label>
+          <input type="number" min="0.1" max="10" step="0.1" v-model.number="planForm.lift_s">
+        </div>
+        <div class="field">
+          <label>保持 (秒)</label>
+          <input type="number" min="0.1" max="30" step="0.1" v-model.number="planForm.hold_s">
+        </div>
+        <div class="field">
+          <label>下降 (秒)</label>
+          <input type="number" min="0.1" max="10" step="0.1" v-model.number="planForm.lower_s">
+        </div>
+        <div class="field">
+          <label>次间间歇 (秒)</label>
+          <input type="number" min="0" max="30" step="0.1" v-model.number="planForm.rest_between_rep_s">
+        </div>
+        <div class="field">
+          <label>组间休息 (秒)</label>
+          <input type="number" min="0" max="300" v-model.number="planForm.rest_between_set_s">
+        </div>
+        <div class="field">
+          <label>基线时长 (分钟,0=跳过)</label>
+          <input type="number" min="0" max="10" v-model.number="planForm.baseline_min">
+        </div>
+      </div>
+      <div v-else class="hint">
+        使用临床默认参数: {{defaultPlan.sets}} 组 × {{defaultPlan.reps_per_set}} 次,
+        保持 {{defaultPlan.hold_s}}s, 基线 {{defaultPlan.baseline_min}} 分钟
+      </div>
+      <p class="hint" v-if="planErrors.length">
+        ⚠ {{planErrors.join('; ')}}
+      </p>
+      <p class="hint warn" v-else-if="planWarning">
+        ⚠ {{planWarning}}
+      </p>
+      <p class="hint" v-else>
+        预计总时长 {{(planEstimateS / 60).toFixed(1)}} 分钟
+      </p>
+      <div class="button-row">
+        <button class="secondary" @click="panel='home'">取消</button>
+        <button class="primary" @click="startSession" :disabled="busy.start || planErrors.length > 0">
+          {{busy.start ? '启动中…' : '启动 Session'}}
+        </button>
+      </div>
+    </div>
+
+    <!-- Patient history panel -->
+    <div v-if="panel === 'patient_history'" class="card">
+      <h2>{{selectedPatient}} 的历史记录</h2>
+      <button class="secondary" @click="panel='home'">← 返回</button>
+      <div v-if="history.length === 0" class="hint" style="margin-top:18px">暂无记录</div>
+      <div v-else class="list" style="margin-top:14px">
+        <div v-for="s in history" :key="s.session_id" class="row">
+          <div class="row-main">
+            <div class="row-title">{{fmtSessionId(s.session_id)}}</div>
+            <div class="row-sub">
+              {{s.status === 'completed' ? '✓ 完成' : s.status}}
+              · 完成度 {{s.completion_pct || 0}}%
+              · 时长 {{(s.duration_s || 0).toFixed(0)}}s
+              · <span v-if="s.has_assessment">📄 AI 报告就绪</span>
+                <span v-else>⏳ AI 报告生成中</span>
+            </div>
+          </div>
+          <div class="row-actions">
+            <button @click="viewAssessment(s.patient, s.session_id)">报告</button>
+            <a :href="downloadUrl(s)" class="btn-link">下载</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Assessment modal -->
+    <div v-if="assessmentModal.open" class="modal-overlay" @click.self="closeAssessment">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>AI 康复评估报告</h2>
+          <button class="modal-close" @click="closeAssessment">×</button>
+        </div>
+        <div class="modal-meta">
+          {{assessmentModal.patient}} · {{fmtSessionId(assessmentModal.sessionId)}}
+        </div>
+        <div v-if="assessmentModal.loading" class="hint">加载中...</div>
+        <div v-else-if="assessmentModal.error" class="hint warn">
+          {{assessmentModal.error}}
+          <div style="margin-top:10px">
+            <button class="secondary" @click="regenerateAssessment">重新生成</button>
+          </div>
+        </div>
+        <div v-else class="markdown" v-html="assessmentModal.html"></div>
+        <div class="button-row" style="margin-top:14px">
+          <button class="secondary" @click="closeAssessment">关闭</button>
+          <button class="secondary" @click="regenerateAssessment"
+                  :disabled="busy.regenerate">
+            {{busy.regenerate ? '生成中…' : '重新生成'}}
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <main v-else>
+    <div class="card"><p class="hint">连接设备中...</p></div>
+  </main>
+
+  <footer>
+    <p>realtime3.0 · Phase 2 业务核心</p>
+  </footer>
+
+  <!-- ────────── Custom confirm modal — replaces window.confirm() ───────── -->
+  <div v-if="confirmState.open" class="modal-overlay confirm-overlay"
+       @click.self="confirmNo">
+    <div class="confirm-card">
+      <div class="confirm-msg">{{confirmState.message}}</div>
+      <div class="confirm-actions">
+        <button class="secondary" @click="confirmNo">
+          {{confirmState.cancelLabel}}
+        </button>
+        <button :class="confirmState.danger ? 'danger' : 'primary'"
+                @click="confirmYes">
+          {{confirmState.confirmLabel}}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ────────── Toast stack — replaces window.alert() ──────────────────── -->
+  <div class="toast-stack" aria-live="polite">
+    <div v-for="t in toasts" :key="t.id"
+         class="toast" :class="'toast-' + t.kind"
+         @click="dismissToast(t.id)">
+      {{t.message}}
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

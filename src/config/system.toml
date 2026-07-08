@@ -1,0 +1,41 @@
+# 系统配置 — 端口、路径、超时等
+# 业务参数 (康复计划默认值) 见 default_plan.json
+
+[device]
+device_name  = "k1-rehab"
+mdns_name    = "k1-rehab.local"
+
+[network]
+http_host    = "0.0.0.0"
+http_port    = 8000
+
+[ipc]
+# Process B (backend) ↔ Process C (screen)
+zmq_state_pub   = "tcp://127.0.0.1:5555"        # B PUB → C SUB
+zmq_command_rep = "tcp://127.0.0.1:5556"        # C REQ → B REP
+
+[paths]
+patients_dir = "patients"
+sessions_dir_template = "patients/{patient}/sessions/{session_id}"
+assets_dir   = "assets"
+queue_dir    = "queue"
+audit_dir    = "audit"
+
+[sensing]
+target_fps          = 10
+baseline_seconds    = 240                       # 4 分钟
+mp_queue_maxsize    = 200
+
+[fsm]
+ws_push_hz          = 10                        # WebSocket 推流频率
+emotion_window_s    = 30                        # Coach 滚动窗口
+sustained_threshold = 0.5                       # 情绪占比 >50% 视为持续
+
+[audio]
+samplerate          = 48000
+channels            = 2
+crossfade_s         = 1.5
+
+[logging]
+level               = "INFO"
+session_log_format  = "jsonl"

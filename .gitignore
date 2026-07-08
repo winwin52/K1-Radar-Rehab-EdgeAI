@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Secrets
+config/secrets.env
+
+# Runtime data (K1 device is single source of truth)
+patients/
+audit/
+queue/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large binaries / temp
+*.log
+/tmp/
