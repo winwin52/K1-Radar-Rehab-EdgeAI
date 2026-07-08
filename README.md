@@ -163,8 +163,11 @@ K1-Radar-Rehab-EdgeAI/
 ├── demo/                       # 演示视频（待补充）
 │   └── .gitkeep
 │
-└── firmware/                   # 雷达固件参考
-    └── .gitkeep
+└── firmware/                   # 雷达固件源码
+    ├── README.md                # 固件说明
+    └── app/                     # 固件应用层源码
+        ├── inc/                 # 头文件 (prj_config, 1d/2d dsp, msg_handler)
+        └── src/                 # 源文件 (main, 1d/2d dsp, debug_tool, msg_handler)
 ```
 
 ---
@@ -243,7 +246,7 @@ REHAB_MOCK_SENSING=1 python3 -m backend.server
 
 - [ ] 演示视频（`demo/`）
 - [ ] 团队成员信息
-- [ ] 雷达固件源码引用
+- [ ] 雷达固件编译说明（SDK版本、工具链）
 
 ---
 
