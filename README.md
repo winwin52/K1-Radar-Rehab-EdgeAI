@@ -163,8 +163,8 @@ K1-Radar-Rehab-EdgeAI/
 │   ├── web/                    # Web 控制台截图（7页）
 │   └── hardware/               # 硬件实物照片（整机/SPI连接/K1/雷达）
 │
-├── demo/                       # 演示视频（待补充）
-│   └── .gitkeep
+├── demo/                       # 演示视频
+│   └── 演示视频.mp4
 │
 └── firmware/                   # 雷达固件源码
     ├── README.md                # 固件说明
@@ -247,7 +247,6 @@ REHAB_MOCK_SENSING=1 python3 -m backend.server
 
 ## 📝 待补充
 
-- [ ] 演示视频（`demo/`）
 - [ ] 团队成员信息
 
 ---
